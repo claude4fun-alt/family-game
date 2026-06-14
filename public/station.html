@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>תחנה</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(160deg,#1a2a6c,#2a4d9e,#3b7dd8); min-height: 100vh; color: #fff; padding: 18px; }
+  .card { background: rgba(255,255,255,.97); color: #1a2a4a; border-radius: 22px; padding: 22px; max-width: 480px; margin: 8px auto; box-shadow: 0 20px 50px rgba(0,0,0,.35); }
+  .badge { display:inline-block; background:#ffd23f; color:#1a2a4a; font-weight:800; padding:6px 16px; border-radius:30px; font-size:14px; margin-bottom:10px; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 18px; color:#2a4d9e; margin: 14px 0 10px; line-height:1.5; }
+  img.qimg { width:100%; border-radius:14px; margin:10px 0; }
+  input, textarea { width:100%; padding:14px; border:2px solid #c9d6f0; border-radius:12px; font-size:16px; font-family:inherit; margin-bottom:12px; }
+  textarea { min-height: 90px; resize: vertical; }
+  .btn { width:100%; padding:16px; border:none; border-radius:14px; font-size:18px; font-weight:800; cursor:pointer; background:linear-gradient(135deg,#ff6b35,#ff9558); color:#fff; box-shadow:0 8px 20px rgba(255,107,53,.4); }
+  .btn:active { transform: scale(.98); }
+  .btn.sec { background:linear-gradient(135deg,#2a4d9e,#3b7dd8); box-shadow:0 8px 20px rgba(42,77,158,.4); }
+  .photo-zone { border:2px dashed #c9d6f0; border-radius:14px; padding:20px; text-align:center; cursor:pointer; margin-bottom:12px; color:#5a6b8a; }
+  .photo-zone img { max-width:100%; border-radius:10px; margin-top:10px; }
+  .hidden { display:none; }
+  .result { text-align:center; padding:30px 20px; }
+  .result .emoji { font-size:64px; margin-bottom:12px; }
+  .result h1 { font-size:26px; }
+  .muted { color:#5a6b8a; font-size:14px; margin-top:8px; }
+  .timer { text-align:center; font-size:14px; color:#5a6b8a; margin-bottom:10px; }
+  .link { display:block; text-align:center; margin-top:14px; color:#2a4d9e; font-weight:700; text-decoration:none; }
+  #qrReader { width:100%; max-width:340px; margin:14px auto 0; border-radius:14px; overflow:hidden; }
+  #qrReader video { border-radius:14px; }
+  .scan-err { color:#c0392b; font-size:13px; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<!-- מסך הצטרפות -->
+<div id="joinScreen" class="card hidden">
+  <span class="badge" id="joinBadge">תחנה</span>
+  <h1 id="joinGameName">המשחק המשפחתי</h1>
+  <p class="muted" style="margin:10px 0 16px">ברוכים הבאים! הזינו פרטים כדי להתחיל לשחק</p>
+  <input id="pName" placeholder="השם שלך" autocomplete="off">
+  <input id="pTeam" placeholder="קוד / שם קבוצה" autocomplete="off">
+  <button class="btn" onclick="join()">בואו נתחיל! 🚀</button>
+</div>
+
+<!-- מסך שאלה -->
+<div id="qScreen" class="card hidden">
+  <span class="badge" id="qBadge">תחנה</span>
+  <h1 id="qTitle"></h1>
+  <div class="timer" id="timer">⏱️ 0 שניות</div>
+  <h2 id="qText"></h2>
+  <img id="qImg" class="qimg hidden">
+
+  <!-- תשובת טקסט -->
+  <div id="textAnswer">
+    <textarea id="answerText" placeholder="כתבו את התשובה כאן..."></textarea>
+  </div>
+
+  <!-- תשובת תמונה -->
+  <div id="photoAnswer" class="hidden">
+    <label class="photo-zone" id="photoZone">
+      📸 לחצו לצילום / העלאת תמונה
+      <input type="file" id="photoInput" accept="image/*" capture="environment" class="hidden" onchange="previewPhoto(event)">
+      <img id="photoPreview" class="hidden">
+    </label>
+    <textarea id="photoCaption" placeholder="הוסיפו כיתוב (אופציונלי)"></textarea>
+  </div>
+
+  <button class="btn" id="submitBtn" onclick="submitAnswer()">שליחת תשובה ✓</button>
+  <p class="muted" style="text-align:center" id="alreadyMsg"></p>
+</div>
+
+<!-- מסך תוצאה -->
+<div id="resultScreen" class="card hidden">
+  <div class="result">
+    <div class="emoji" id="resEmoji">🎉</div>
+    <h1 id="resTitle"></h1>
+    <p class="muted" id="resSub"></p>
+    <a class="link" href="/board" target="_blank">📊 צפו בטבלת התוצאות החיה</a>
+    <p class="muted" style="margin-top:18px">חפשו את התחנה הבאה!</p>
+    <button class="btn sec" style="margin-top:12px" id="scanBtn" onclick="startScan()">📷 סרוק QR של התחנה הבאה</button>
+    <div id="qrReader"></div>
+    <p class="scan-err" id="scanErr"></p>
+    <button class="btn" style="margin-top:8px;display:none" id="stopScanBtn" onclick="stopScan()">עצור סריקה</button>
+  </div>
+</div>
+
+<p style="text-align:center;color:rgba(255,255,255,.6);font-size:12px;margin-top:14px">נוצר ע"י Amir Cohen</p>
+
+<script>
+const stationId = location.pathname.split('/').pop();
+let player = JSON.parse(localStorage.getItem('fg_player') || 'null');
+let station = null;
+let startedAt = Date.now();
+let timerInt = null;
+
+async function init() {
+  if (!player) {
+    document.getElementById('joinBadge').textContent = 'תחנה ' + stationId;
+    show('joinScreen');
+    // טען שם משחק
+    try { const r = await fetch('/api/station/' + stationId); const d = await r.json(); document.getElementById('joinGameName').textContent = d.gameName || 'המשחק המשפחתי'; } catch(e){}
+    return;
+  }
+  loadStation();
+}
+
+async function join() {
+  const name = document.getElementById('pName').value.trim();
+  const team = document.getElementById('pTeam').value.trim();
+  if (!name) { alert('נא להזין שם'); return; }
+  const r = await fetch('/api/join', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, team }) });
+  const d = await r.json();
+  player = d;
+  localStorage.setItem('fg_player', JSON.stringify(player));
+  loadStation();
+}
+
+async function loadStation() {
+  const r = await fetch('/api/station/' + stationId + '?player=' + player.playerId);
+  station = await r.json();
+  document.getElementById('qBadge').textContent = 'תחנה ' + station.id;
+  document.getElementById('qTitle').textContent = station.title;
+  document.getElementById('qText').textContent = station.questionText || '(לא הוגדרה שאלה לתחנה זו)';
+  if (station.imageUrl) { const im = document.getElementById('qImg'); im.src = station.imageUrl; im.classList.remove('hidden'); }
+
+  if (station.questionType === 'photo') {
+    document.getElementById('textAnswer').classList.add('hidden');
+    document.getElementById('photoAnswer').classList.remove('hidden');
+  }
+
+  if (station.alreadyAnswered) {
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitBtn').style.opacity = .5;
+    const pr = station.previousResult;
+    document.getElementById('alreadyMsg').textContent = pr.pending ? 'כבר שלחת תשובה לתחנה זו (ממתינה לאישור)' : (pr.correct ? 'כבר ענית נכון על תחנה זו ✓' : 'כבר ענית על תחנה זו');
+  }
+
+  show('qScreen');
+  startedAt = Date.now();
+  clearInterval(timerInt);
+  timerInt = setInterval(() => {
+    document.getElementById('timer').textContent = '⏱️ ' + Math.floor((Date.now()-startedAt)/1000) + ' שניות';
+  }, 1000);
+}
+
+let photoFile = null;
+function previewPhoto(e) {
+  photoFile = e.target.files[0];
+  if (!photoFile) return;
+  const p = document.getElementById('photoPreview');
+  p.src = URL.createObjectURL(photoFile);
+  p.classList.remove('hidden');
+}
+
+async function submitAnswer() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'שולח...';
+  const fd = new FormData();
+  fd.append('playerId', player.playerId);
+  fd.append('stationId', stationId);
+  fd.append('startedAt', startedAt);
+  if (station.questionType === 'photo') {
+    if (!photoFile) { alert('נא לצרף תמונה'); btn.disabled=false; btn.textContent='שליחת תשובה ✓'; return; }
+    fd.append('photo', photoFile);
+    fd.append('answerText', document.getElementById('photoCaption').value);
+  } else {
+    const t = document.getElementById('answerText').value.trim();
+    if (!t) { alert('נא להזין תשובה'); btn.disabled=false; btn.textContent='שליחת תשובה ✓'; return; }
+    fd.append('answerText', t);
+  }
+  try {
+    const r = await fetch('/api/answer', { method:'POST', body: fd });
+    const d = await r.json();
+    clearInterval(timerInt);
+    showResult(d);
+  } catch(e) {
+    alert('שגיאה בשליחה, נסו שוב');
+    btn.disabled=false; btn.textContent='שליחת תשובה ✓';
+  }
+}
+
+function showResult(d) {
+  const emoji = d.correct === true ? '🎉' : d.pending ? '📸' : '💪';
+  document.getElementById('resEmoji').textContent = emoji;
+  document.getElementById('resTitle').textContent = d.message;
+  document.getElementById('resSub').textContent = d.points ? ('+' + d.points + ' נקודות') : (d.pending ? 'התשובה שלך תיבדק על ידי המנהל' : '');
+  show('resultScreen');
+}
+
+function show(id) {
+  ['joinScreen','qScreen','resultScreen'].forEach(s => document.getElementById(s).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+document.getElementById('photoZone')?.addEventListener('click', () => document.getElementById('photoInput').click());
+
+// --- סורק QR מובנה ---
+let qrScanner = null;
+async function startScan() {
+  const err = document.getElementById('scanErr'); err.textContent = '';
+  document.getElementById('scanBtn').style.display = 'none';
+  document.getElementById('stopScanBtn').style.display = 'inline-block';
+  try {
+    qrScanner = new Html5Qrcode('qrReader');
+    await qrScanner.start(
+      { facingMode: 'environment' },           // מצלמה אחורית
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      onScanSuccess,
+      () => {}                                   // התעלם מכישלונות סריקה רגעיים
+    );
+  } catch (e) {
+    err.textContent = 'לא ניתן לגשת למצלמה. ודאו שאישרתם הרשאה, או סרקו עם אפליקציית המצלמה הרגילה.';
+    document.getElementById('scanBtn').style.display = 'inline-block';
+    document.getElementById('stopScanBtn').style.display = 'none';
+  }
+}
+
+function onScanSuccess(decodedText) {
+  // ה-QR מכיל כתובת מלאה לתחנה, למשל https://.../station/4
+  stopScan();
+  try {
+    const url = new URL(decodedText);
+    // ודא שזה אכן קישור לתחנה באותו אתר
+    if (/\/station\/\d+/.test(url.pathname)) {
+      location.href = url.pathname;   // ניווט פנימי - שומר על אותו דומיין
+      return;
+    }
+  } catch (e) {}
+  // אם זה לא נראה כמו קישור תחנה תקין, נסה לנווט ישירות
+  location.href = decodedText;
+}
+
+async function stopScan() {
+  if (qrScanner) {
+    try { await qrScanner.stop(); qrScanner.clear(); } catch (e) {}
+    qrScanner = null;
+  }
+  document.getElementById('stopScanBtn').style.display = 'none';
+  document.getElementById('scanBtn').style.display = 'inline-block';
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: family-game
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ADMIN_PASS
+        sync: false

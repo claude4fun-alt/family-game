@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>דשבורד ניהול - המשחק המשפחתי</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family:'Segoe UI',Arial,sans-serif; background:#eef2f9; color:#1a2a4a; padding:18px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { background:linear-gradient(135deg,#1a2a6c,#3b7dd8); color:#fff; padding:22px; border-radius:18px; margin-bottom:18px; box-shadow:0 10px 30px rgba(26,42,108,.25); }
+  header h1 { font-size:24px; } header p { opacity:.85; margin-top:4px; font-size:14px; }
+  .login { background:#fff; padding:30px; border-radius:18px; max-width:380px; margin:60px auto; box-shadow:0 10px 30px rgba(0,0,0,.1); text-align:center; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .tab { padding:10px 18px; background:#fff; border-radius:12px; cursor:pointer; font-weight:700; border:2px solid transparent; }
+  .tab.active { border-color:#3b7dd8; color:#1a2a6c; }
+  .panel { display:none; } .panel.active { display:block; }
+  .station-card { background:#fff; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 4px 14px rgba(0,0,0,.06); }
+  .station-card h3 { color:#1a2a6c; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .num { background:#ffd23f; color:#1a2a4a; width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:800; }
+  label { display:block; font-size:13px; font-weight:700; color:#5a6b8a; margin:10px 0 4px; }
+  input, textarea, select { width:100%; padding:11px; border:2px solid #d5deef; border-radius:10px; font-size:15px; font-family:inherit; }
+  textarea { min-height:60px; resize:vertical; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .btn { padding:11px 20px; border:none; border-radius:10px; font-weight:700; cursor:pointer; background:#3b7dd8; color:#fff; font-size:15px; }
+  .btn.green { background:#22a06b; } .btn.gold { background:#ffd23f; color:#1a2a4a; } .btn.gray{ background:#8a98b5;}
+  .btn:active { transform:scale(.97); }
+  .saved { color:#22a06b; font-weight:700; font-size:13px; margin-right:8px; }
+  .qr-box { text-align:center; padding:14px; }
+  .qr-box img { width:180px; }
+  .qr-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+  .qr-cell { background:#fff; border-radius:14px; padding:16px; text-align:center; box-shadow:0 4px 14px rgba(0,0,0,.06); }
+  .qr-cell h4 { color:#1a2a6c; margin-bottom:8px; }
+  .qr-cell .url { font-size:11px; color:#8a98b5; word-break:break-all; margin-top:6px; }
+  .pending-card { background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 4px 14px rgba(0,0,0,.06); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .pending-card img { width:120px; border-radius:10px; }
+  .imgprev { max-width:140px; border-radius:10px; margin-top:8px; }
+  .hint { font-size:12px; color:#8a98b5; margin-top:3px; }
+  @media print { .noprint { display:none !important; } body{background:#fff;} .qr-cell{page-break-inside:avoid;} }
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <h2 style="margin-bottom:16px">🔐 כניסת מנהל</h2>
+  <input id="user" placeholder="שם משתמש" autocomplete="username" style="margin-bottom:10px">
+  <input id="pass" type="password" placeholder="סיסמה" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="btn" style="width:100%;margin-top:12px" onclick="doLogin()">כניסה</button>
+  <p class="hint" id="loginErr" style="margin-top:10px;color:#c0392b"></p>
+</div>
+
+<div id="app" class="wrap" style="display:none">
+  <header>
+    <h1>🎮 דשבורד ניהול</h1>
+    <p>ניהול שאלות, תמונות, קודי QR ותוצאות</p>
+    <p style="opacity:.7;font-size:13px;margin-top:6px">נוצר ע"י Amir Cohen</p>
+  </header>
+
+  <div class="tabs noprint">
+    <div class="tab active" onclick="showTab('questions',this)">📝 שאלות</div>
+    <div class="tab" onclick="showTab('qr',this)">🔲 קודי QR להדפסה</div>
+    <div class="tab" onclick="showTab('pending',this)">📸 אישור תמונות</div>
+    <div class="tab" onclick="showTab('settings',this)">⚙️ הגדרות</div>
+  </div>
+
+  <!-- שאלות -->
+  <div id="questions" class="panel active"></div>
+
+  <!-- QR -->
+  <div id="qr" class="panel">
+    <div class="noprint" style="background:#fff;padding:16px;border-radius:14px;margin-bottom:14px">
+      <label>כתובת בסיס (ה-URL של האתר באינטרנט)</label>
+      <input id="baseUrl" placeholder="https://your-game.onrender.com">
+      <p class="hint">השאר ריק כדי להשתמש בכתובת הנוכחית. אחרי שתעלה ל-Render, הדבק כאן את הכתובת הקבועה ולחץ "צור הכל".</p>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn" onclick="generateAllQR()">🔄 צור הכל</button>
+        <button class="btn gold" onclick="window.print()">🖨️ הדפס דף QR</button>
+      </div>
+    </div>
+    <div class="qr-grid" id="qrGrid"></div>
+  </div>
+
+  <!-- אישור תמונות -->
+  <div id="pending" class="panel">
+    <button class="btn noprint" onclick="loadPending()">🔄 רענן</button>
+    <div id="pendingList" style="margin-top:14px"></div>
+  </div>
+
+  <!-- הגדרות -->
+  <div id="settings" class="panel">
+    <div class="station-card">
+      <label>שם המשחק</label>
+      <input id="gameName">
+      <button class="btn" style="margin-top:10px" onclick="saveGameName()">שמור שם</button>
+    </div>
+
+    <div class="station-card">
+      <h3>⚡ בונוס מהירות</h3>
+      <p class="hint">תשובה נכונה מהירה מזכה בנקודות בונוס. הבונוס יורד בהדרגה מהמקסימום (תשובה מיידית) ל-0 (בתום חלון הזמן).</p>
+      <div style="display:flex;align-items:center;gap:8px;margin:12px 0">
+        <input type="checkbox" id="sbEnabled" style="width:auto"> <label style="margin:0">הפעל בונוס מהירות</label>
+      </div>
+      <div class="row">
+        <div>
+          <label>בונוס מקסימלי (נקודות)</label>
+          <input type="number" id="sbMax" min="0" value="10">
+        </div>
+        <div>
+          <label>חלון זמן (שניות)</label>
+          <input type="number" id="sbWindow" min="1" value="60">
+        </div>
+      </div>
+      <p class="hint" id="sbPreview" style="margin-top:8px"></p>
+      <button class="btn" style="margin-top:10px" onclick="saveSpeedBonus()">שמור בונוס</button>
+      <span class="saved" id="sbSaved" style="display:none">נשמר ✓</span>
+    </div>
+
+    <div class="station-card" id="credCard">
+      <h3>👤 שינוי המנהל המשני</h3>
+      <p class="hint">המנהל המשני הוא משתמש נוסף עם גישה מלאה לדשבורד. מנהל-העל הראשי קבוע ולא ניתן לשינוי.</p>
+      <label>שם משתמש משני נוכחי: <strong id="curSecUser">—</strong></label>
+      <label>שם משתמש חדש</label>
+      <input id="newSecUser" placeholder="לפחות 3 תווים" autocomplete="off">
+      <label>סיסמה חדשה</label>
+      <input id="newSecPass" type="text" placeholder="לפחות 4 תווים" autocomplete="off">
+      <button class="btn" style="margin-top:10px" onclick="saveSecondary()">עדכן פרטי מנהל משני</button>
+      <span class="saved" id="secSaved" style="display:none">נשמר ✓</span>
+    </div>
+
+    <div class="station-card">
+      <h3>🔗 קישורים</h3>
+      <p>📊 לוח תוצאות חי: <a id="boardLink" href="/board" target="_blank">/board</a></p>
+      <p style="margin-top:8px">🎮 דוגמת תחנה: <a href="/station/1" target="_blank">/station/1</a></p>
+    </div>
+    <div class="station-card">
+      <h3 style="color:#c0392b">⚠️ איפוס משחק</h3>
+      <p class="hint">מוחק את כל השחקנים והתשובות (השאלות נשמרות). שימושי בין משחקים.</p>
+      <button class="btn gray" style="margin-top:10px;background:#c0392b" onclick="resetGame()">אפס משחק</button>
+    </div>
+    <div class="station-card">
+      <button class="btn gray" onclick="logout()">🚪 יציאה מהמערכת</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let TOKEN = '';
+let ROLE = '';
+function H() { return { 'x-admin-token': TOKEN }; }
+
+async function doLogin() {
+  const user = document.getElementById('user').value.trim();
+  const pass = document.getElementById('pass').value;
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  try {
+    const r = await fetch('/api/admin/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user, pass })
+    });
+    if (!r.ok) { errEl.textContent = 'שם משתמש או סיסמה שגויים'; return; }
+    const d = await r.json();
+    TOKEN = d.token; ROLE = d.role;
+    localStorage.setItem('fg_token', TOKEN);
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadStations();
+    loadSettings();
+  } catch (e) { errEl.textContent = 'שגיאת חיבור'; }
+}
+
+function logout() {
+  fetch('/api/admin/logout', { method: 'POST', headers: H() });
+  localStorage.removeItem('fg_token');
+  location.reload();
+}
+
+function showTab(id, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'qr') generateAllQR();
+  if (id === 'pending') loadPending();
+  if (id === 'settings') loadSettings();
+}
+
+let stations = [];
+async function loadStations() {
+  const r = await fetch('/api/admin/stations', { headers: H() });
+  const d = await r.json();
+  stations = d.stations;
+  document.getElementById('gameName').value = d.gameName;
+  renderStations();
+}
+
+function renderStations() {
+  const c = document.getElementById('questions');
+  c.innerHTML = stations.map(st => `
+    <div class="station-card" id="card-${st.id}">
+      <h3><span class="num">${st.id}</span> <input style="font-size:16px;font-weight:700" value="${esc(st.title)}" id="title-${st.id}"></h3>
+      <div class="row">
+        <div>
+          <label>סוג שאלה</label>
+          <select id="type-${st.id}" onchange="toggleType(${st.id})">
+            <option value="text" ${st.questionType==='text'?'selected':''}>תשובת טקסט</option>
+            <option value="photo" ${st.questionType==='photo'?'selected':''}>תשובת תמונה (משימה)</option>
+          </select>
+        </div>
+        <div>
+          <label>נקודות</label>
+          <input type="number" id="points-${st.id}" value="${st.points}">
+        </div>
+      </div>
+      <label>השאלה / המשימה</label>
+      <textarea id="qtext-${st.id}">${esc(st.questionText)}</textarea>
+      <div id="ans-${st.id}" style="${st.questionType==='photo'?'display:none':''}">
+        <label>תשובה נכונה <span class="hint">(מילות מפתח מופרדות בפסיק - מספיק שאחת תופיע)</span></label>
+        <input id="correct-${st.id}" value="${esc(st.correctAnswer)}">
+      </div>
+      <label>תמונה לשאלה (אופציונלי)</label>
+      <div class="row">
+        <input type="file" id="imgfile-${st.id}" accept="image/*">
+        <input id="imglink-${st.id}" placeholder="או הדבק לינק לתמונה">
+      </div>
+      ${st.imageUrl ? `<img class="imgprev" src="${st.imageUrl}"><br><button class="btn gray" style="margin-top:6px" onclick="clearImg(${st.id})">הסר תמונה</button>` : ''}
+      <div style="margin-top:14px;display:flex;align-items:center">
+        <button class="btn green" onclick="saveStation(${st.id})">💾 שמור תחנה ${st.id}</button>
+        <span class="saved" id="saved-${st.id}" style="display:none">נשמר ✓</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleType(id) {
+  const t = document.getElementById('type-'+id).value;
+  document.getElementById('ans-'+id).style.display = t === 'photo' ? 'none' : 'block';
+}
+
+async function saveStation(id) {
+  const fd = new FormData();
+  fd.append('title', document.getElementById('title-'+id).value);
+  fd.append('questionType', document.getElementById('type-'+id).value);
+  fd.append('questionText', document.getElementById('qtext-'+id).value);
+  fd.append('correctAnswer', document.getElementById('correct-'+id)?.value || '');
+  fd.append('points', document.getElementById('points-'+id).value);
+  const link = document.getElementById('imglink-'+id).value.trim();
+  if (link) fd.append('imageLink', link);
+  const f = document.getElementById('imgfile-'+id).files[0];
+  if (f) fd.append('image', f);
+  const r = await fetch('/api/admin/station/'+id, { method:'POST', headers: H(), body: fd });
+  const d = await r.json();
+  const idx = stations.findIndex(s=>s.id==id); if(idx>=0) stations[idx]=d.station;
+  const s = document.getElementById('saved-'+id); s.style.display='inline'; setTimeout(()=>s.style.display='none',2000);
+  if (f || link) renderStations();
+}
+
+async function clearImg(id) {
+  const fd = new FormData(); fd.append('clearImage','true');
+  await fetch('/api/admin/station/'+id, { method:'POST', headers: H(), body: fd });
+  const idx = stations.findIndex(s=>s.id==id); if(idx>=0) stations[idx].imageUrl='';
+  renderStations();
+}
+
+async function generateAllQR() {
+  const base = document.getElementById('baseUrl').value.trim();
+  const grid = document.getElementById('qrGrid');
+  grid.innerHTML = 'יוצר קודים...';
+  let html = '';
+  for (const st of stations) {
+    const q = base ? '?base='+encodeURIComponent(base) : '';
+    const r = await fetch('/api/admin/qr/'+st.id+q, { headers: H() });
+    const d = await r.json();
+    html += `<div class="qr-cell"><h4>תחנה ${st.id}</h4><div style="font-size:13px;color:#5a6b8a;margin-bottom:6px">${esc(st.title)}</div><img src="${d.qr}"><div class="url">${d.url}</div></div>`;
+  }
+  grid.innerHTML = html;
+}
+
+async function loadPending() {
+  const r = await fetch('/api/admin/pending', { headers: H() });
+  const d = await r.json();
+  const c = document.getElementById('pendingList');
+  if (!d.pending.length) { c.innerHTML = '<p class="hint">אין תשובות תמונה הממתינות לאישור</p>'; return; }
+  c.innerHTML = d.pending.map(p => `
+    <div class="pending-card">
+      <img src="${p.photoUrl}">
+      <div style="flex:1">
+        <strong>${esc(p.name)}</strong> ${p.team?('('+esc(p.team)+')'):''} - תחנה ${p.stationId}
+        ${p.answerText?('<div class="hint">כיתוב: '+esc(p.answerText)+'</div>'):''}
+      </div>
+      <button class="btn green" onclick="review('${p.playerId}',${p.stationId},true)">✓ נכון</button>
+      <button class="btn gray" onclick="review('${p.playerId}',${p.stationId},false)">✗ לא</button>
+    </div>
+  `).join('');
+}
+
+async function review(playerId, stationId, approve) {
+  await fetch('/api/admin/review', { method:'POST', headers: {...H(),'Content-Type':'application/json'}, body: JSON.stringify({playerId, stationId, approve}) });
+  loadPending();
+}
+
+async function saveGameName() {
+  await fetch('/api/admin/game-name', { method:'POST', headers: {...H(),'Content-Type':'application/json'}, body: JSON.stringify({ gameName: document.getElementById('gameName').value }) });
+  alert('שם המשחק נשמר');
+}
+
+// --- הגדרות: בונוס מהירות + מנהל משני ---
+async function loadSettings() {
+  const r = await fetch('/api/admin/settings', { headers: H() });
+  if (!r.ok) return;
+  const d = await r.json();
+  const sb = d.speedBonus || {};
+  document.getElementById('sbEnabled').checked = !!sb.enabled;
+  document.getElementById('sbMax').value = sb.maxBonus ?? 10;
+  document.getElementById('sbWindow').value = sb.windowSec ?? 60;
+  document.getElementById('curSecUser').textContent = d.secondaryUserName || '—';
+  updateBonusPreview();
+}
+
+function updateBonusPreview() {
+  const max = Number(document.getElementById('sbMax').value) || 0;
+  const win = Number(document.getElementById('sbWindow').value) || 60;
+  const half = Math.round(max / 2);
+  document.getElementById('sbPreview').textContent =
+    `דוגמה: תשובה מיידית = +${max} נק' · אחרי ${Math.round(win/2)} שניות ≈ +${half} נק' · אחרי ${win} שניות = 0`;
+}
+document.addEventListener('input', e => { if (e.target.id==='sbMax' || e.target.id==='sbWindow') updateBonusPreview(); });
+
+async function saveSpeedBonus() {
+  const body = {
+    enabled: document.getElementById('sbEnabled').checked,
+    maxBonus: Number(document.getElementById('sbMax').value),
+    windowSec: Number(document.getElementById('sbWindow').value)
+  };
+  await fetch('/api/admin/speed-bonus', { method:'POST', headers: {...H(),'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const s = document.getElementById('sbSaved'); s.style.display='inline'; setTimeout(()=>s.style.display='none',2000);
+}
+
+async function saveSecondary() {
+  const user = document.getElementById('newSecUser').value.trim();
+  const pass = document.getElementById('newSecPass').value.trim();
+  if (!user || !pass) { alert('נא למלא שם משתמש וסיסמה'); return; }
+  const r = await fetch('/api/admin/secondary-credentials', { method:'POST', headers: {...H(),'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
+  const d = await r.json();
+  if (!r.ok) { alert(d.error || 'שגיאה'); return; }
+  document.getElementById('curSecUser').textContent = d.secondaryUserName;
+  document.getElementById('newSecUser').value = '';
+  document.getElementById('newSecPass').value = '';
+  const s = document.getElementById('secSaved'); s.style.display='inline'; setTimeout(()=>s.style.display='none',2000);
+}
+
+async function resetGame() {
+  if (!confirm('בטוח? כל השחקנים והתשובות יימחקו')) return;
+  await fetch('/api/admin/reset', { method:'POST', headers: H() });
+  alert('המשחק אופס');
+}
+
+function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// כניסה אוטומטית אם יש טוקן שמור ותקף
+(async () => {
+  const saved = localStorage.getItem('fg_token');
+  if (!saved) return;
+  TOKEN = saved;
+  const r = await fetch('/api/admin/me', { headers: H() });
+  if (r.ok) {
+    const d = await r.json(); ROLE = d.role;
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadStations();
+    loadSettings();
+  } else {
+    localStorage.removeItem('fg_token'); TOKEN = '';
+  }
+})();
+</script>
+</body>
+</html>

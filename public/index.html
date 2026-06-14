@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>המשחק המשפחתי</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  body { font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(160deg,#1a2a6c,#3b7dd8); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; padding:20px; }
+  .card { background:rgba(255,255,255,.97); color:#1a2a4a; border-radius:24px; padding:36px; max-width:420px; text-align:center; box-shadow:0 25px 60px rgba(0,0,0,.4); }
+  h1 { font-size:30px; margin-bottom:8px; } p { color:#5a6b8a; margin-bottom:24px; }
+  .btn { display:block; width:100%; padding:16px; border:none; border-radius:14px; font-weight:800; font-size:17px; text-decoration:none; margin-bottom:12px; color:#fff; cursor:pointer; font-family:inherit; }
+  .b1 { background:linear-gradient(135deg,#ff6b35,#ff9558); }
+  .b2 { background:linear-gradient(135deg,#22a06b,#42f5b3); color:#fff; }
+  .b3 { background:linear-gradient(135deg,#2a4d9e,#3b7dd8); }
+  .bscan { background:linear-gradient(135deg,#7b2ff7,#9d50ff); }
+  .emoji { font-size:60px; margin-bottom:10px; }
+  #qrReader { width:100%; max-width:320px; margin:8px auto 12px; border-radius:14px; overflow:hidden; }
+  .scan-err { color:#c0392b; font-size:13px; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="emoji">🎮</div>
+  <h1>המשחק המשפחתי</h1>
+  <p>משחק תחנות אינטראקטיבי עם קודי QR</p>
+  <button class="btn bscan" id="scanBtn" onclick="startScan()">📷 סרוק QR של תחנה</button>
+  <div id="qrReader"></div>
+  <p class="scan-err" id="scanErr"></p>
+  <button class="btn b3" style="display:none" id="stopScanBtn" onclick="stopScan()">עצור סריקה</button>
+  <a class="btn b2" href="/board">📊 לוח תוצאות חי</a>
+  <a class="btn b1" href="/dashboard">📝 דשבורד ניהול</a>
+  <p style="color:#8a98b5;font-size:13px;margin-top:18px;margin-bottom:0">נוצר ע"י Amir Cohen</p>
+</div>
+
+<script>
+let qrScanner = null;
+async function startScan() {
+  const err = document.getElementById('scanErr'); err.textContent = '';
+  document.getElementById('scanBtn').style.display = 'none';
+  document.getElementById('stopScanBtn').style.display = 'block';
+  try {
+    qrScanner = new Html5Qrcode('qrReader');
+    await qrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      onScanSuccess,
+      () => {}
+    );
+  } catch (e) {
+    err.textContent = 'לא ניתן לגשת למצלמה. ודאו שאישרתם הרשאה, או סרקו עם אפליקציית המצלמה.';
+    document.getElementById('scanBtn').style.display = 'block';
+    document.getElementById('stopScanBtn').style.display = 'none';
+  }
+}
+function onScanSuccess(decodedText) {
+  stopScan();
+  try {
+    const url = new URL(decodedText);
+    if (/\/station\/\d+/.test(url.pathname)) { location.href = url.pathname; return; }
+  } catch (e) {}
+  location.href = decodedText;
+}
+async function stopScan() {
+  if (qrScanner) { try { await qrScanner.stop(); qrScanner.clear(); } catch (e) {} qrScanner = null; }
+  document.getElementById('stopScanBtn').style.display = 'none';
+  document.getElementById('scanBtn').style.display = 'block';
+}
+</script>
+</body>
+</html>
