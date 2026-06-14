@@ -7,10 +7,12 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family:'Segoe UI',Arial,sans-serif; background:#eef2f9; color:#1a2a4a; padding:18px; }
+  body.login-mode { background:#0e1a14 url('/assets/poster.png') center top / cover no-repeat fixed; padding:0; }
+  body.login-mode::before { content:''; position:fixed; inset:0; background:linear-gradient(180deg, rgba(10,20,15,.5), rgba(10,20,15,.8)); z-index:0; }
   .wrap { max-width: 1100px; margin: 0 auto; }
   header { background:linear-gradient(135deg,#1a2a6c,#3b7dd8); color:#fff; padding:22px; border-radius:18px; margin-bottom:18px; box-shadow:0 10px 30px rgba(26,42,108,.25); }
   header h1 { font-size:24px; } header p { opacity:.85; margin-top:4px; font-size:14px; }
-  .login { background:#fff; padding:30px; border-radius:18px; max-width:380px; margin:60px auto; box-shadow:0 10px 30px rgba(0,0,0,.1); text-align:center; }
+  .login { position:relative; z-index:1; background:#fff; padding:30px; border-radius:18px; max-width:380px; margin:0 auto; box-shadow:0 20px 50px rgba(0,0,0,.4); text-align:center; top:50%; transform:translateY(-50%); }
   .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
   .tab { padding:10px 18px; background:#fff; border-radius:12px; cursor:pointer; font-weight:700; border:2px solid transparent; }
   .tab.active { border-color:#3b7dd8; color:#1a2a6c; }
@@ -39,7 +41,7 @@
   @media print { .noprint { display:none !important; } body{background:#fff;} .qr-cell{page-break-inside:avoid;} }
 </style>
 </head>
-<body>
+<body class="login-mode">
 
 <div id="login" class="login">
   <h2 style="margin-bottom:16px">🔐 כניסת מנהל</h2>
@@ -162,6 +164,7 @@ async function doLogin() {
     const d = await r.json();
     TOKEN = d.token; ROLE = d.role;
     localStorage.setItem('fg_token', TOKEN);
+    document.body.classList.remove('login-mode');
     document.getElementById('login').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadStations();
@@ -365,6 +368,7 @@ function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&
   const r = await fetch('/api/admin/me', { headers: H() });
   if (r.ok) {
     const d = await r.json(); ROLE = d.role;
+    document.body.classList.remove('login-mode');
     document.getElementById('login').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadStations();

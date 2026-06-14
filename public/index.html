@@ -3,37 +3,72 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>המשחק המשפחתי</title>
+<title>משחק חברה</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-  body { font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(160deg,#1a2a6c,#3b7dd8); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; padding:20px; }
-  .card { background:rgba(255,255,255,.97); color:#1a2a4a; border-radius:24px; padding:36px; max-width:420px; text-align:center; box-shadow:0 25px 60px rgba(0,0,0,.4); }
-  h1 { font-size:30px; margin-bottom:8px; } p { color:#5a6b8a; margin-bottom:24px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',Arial,sans-serif; min-height:100vh; color:#fff;
+    background:#0e1a14 url('/assets/poster.png') center top / cover no-repeat fixed; }
+  /* שכבת כהות מעל הרקע בכל המסכים הפנימיים */
+  .overlay { position:fixed; inset:0; background:linear-gradient(180deg, rgba(10,20,15,.55), rgba(10,20,15,.82)); z-index:0; }
+
+  /* מסך פתיחה - הפוסטר במלואו */
+  #welcome { position:relative; z-index:2; min-height:100vh; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding:0 0 40px; }
+  #welcome .startBtn {
+    background:linear-gradient(135deg,#f5b800,#ff9100); color:#1a1208; border:none;
+    padding:20px 70px; border-radius:50px; font-size:26px; font-weight:900; font-family:inherit;
+    cursor:pointer; box-shadow:0 12px 30px rgba(0,0,0,.5), 0 0 0 4px rgba(255,255,255,.15);
+    letter-spacing:1px; animation:bob 2s ease-in-out infinite; }
+  @keyframes bob { 50% { transform:translateY(-8px); } }
+  #welcome .startBtn:active { transform:scale(.96); }
+  #welcome .hint { margin-top:14px; font-size:14px; color:rgba(255,255,255,.85); text-shadow:0 2px 8px rgba(0,0,0,.8); }
+
+  /* תפריט ראשי */
+  #menu { position:relative; z-index:2; min-height:100vh; display:none; align-items:center; justify-content:center; padding:20px; }
+  .card { background:rgba(255,255,255,.97); color:#1a2a4a; border-radius:24px; padding:32px 28px; max-width:420px; width:100%; text-align:center; box-shadow:0 25px 60px rgba(0,0,0,.5); }
+  .card .logo { font-size:30px; font-weight:900; color:#1a2a4a; margin-bottom:4px; }
+  .card .sub { color:#5a6b8a; margin-bottom:22px; font-size:15px; }
   .btn { display:block; width:100%; padding:16px; border:none; border-radius:14px; font-weight:800; font-size:17px; text-decoration:none; margin-bottom:12px; color:#fff; cursor:pointer; font-family:inherit; }
   .b1 { background:linear-gradient(135deg,#ff6b35,#ff9558); }
-  .b2 { background:linear-gradient(135deg,#22a06b,#42f5b3); color:#fff; }
+  .b2 { background:linear-gradient(135deg,#22a06b,#42f5b3); }
   .b3 { background:linear-gradient(135deg,#2a4d9e,#3b7dd8); }
-  .bscan { background:linear-gradient(135deg,#7b2ff7,#9d50ff); }
-  .emoji { font-size:60px; margin-bottom:10px; }
+  .bscan { background:linear-gradient(135deg,#f5b800,#ff9100); color:#1a1208; }
   #qrReader { width:100%; max-width:320px; margin:8px auto 12px; border-radius:14px; overflow:hidden; }
   .scan-err { color:#c0392b; font-size:13px; margin-bottom:10px; }
+  .credit { color:#8a98b5; font-size:13px; margin-top:16px; }
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="emoji">🎮</div>
-  <h1>המשחק המשפחתי</h1>
-  <p>משחק תחנות אינטראקטיבי עם קודי QR</p>
-  <button class="btn bscan" id="scanBtn" onclick="startScan()">📷 סרוק QR של תחנה</button>
-  <div id="qrReader"></div>
-  <p class="scan-err" id="scanErr"></p>
-  <button class="btn b3" style="display:none" id="stopScanBtn" onclick="stopScan()">עצור סריקה</button>
-  <a class="btn b2" href="/board">📊 לוח תוצאות חי</a>
-  <a class="btn b1" href="/dashboard">📝 דשבורד ניהול</a>
-  <p style="color:#8a98b5;font-size:13px;margin-top:18px;margin-bottom:0">נוצר ע"י Amir Cohen</p>
+
+<!-- מסך פתיחה: הפוסטר במלואו + כפתור התחל -->
+<div id="welcome">
+  <button class="startBtn" onclick="enter()">התחל ▶</button>
+  <div class="hint">לחצו כדי להתחיל את ההרפתקה</div>
+</div>
+
+<!-- תפריט ראשי (מופיע אחרי לחיצה על התחל) -->
+<div class="overlay" id="ov" style="display:none"></div>
+<div id="menu">
+  <div class="card">
+    <div class="logo">🎮 משחק חברה</div>
+    <div class="sub">לכל הגילאים</div>
+    <button class="btn bscan" id="scanBtn" onclick="startScan()">📷 סרוק QR של תחנה</button>
+    <div id="qrReader"></div>
+    <p class="scan-err" id="scanErr"></p>
+    <button class="btn b3" style="display:none" id="stopScanBtn" onclick="stopScan()">עצור סריקה</button>
+    <a class="btn b2" href="/board">📊 לוח תוצאות חי</a>
+    <a class="btn b1" href="/dashboard">📝 דשבורד ניהול</a>
+    <p class="credit">נוצר ע"י Amir Cohen</p>
+  </div>
 </div>
 
 <script>
+function enter() {
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('ov').style.display = 'block';
+  document.getElementById('menu').style.display = 'flex';
+}
+
 let qrScanner = null;
 async function startScan() {
   const err = document.getElementById('scanErr'); err.textContent = '';

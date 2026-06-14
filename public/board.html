@@ -7,7 +7,10 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(180deg,#0a1840,#162a5e 60%,#2a4d9e); color:#fff; min-height:100vh; overflow-x:hidden; }
+  body { font-family:'Segoe UI',Arial,sans-serif; color:#fff; min-height:100vh; overflow-x:hidden;
+    background:#0e1a14 url('/assets/poster.png') center top / cover no-repeat fixed; position:relative; }
+  body::before { content:''; position:fixed; inset:0; background:linear-gradient(180deg, rgba(10,20,15,.72), rgba(10,20,15,.9)); z-index:0; }
+  body > * { position:relative; z-index:1; }
   header { text-align:center; padding:18px; }
   header h1 { font-size:28px; text-shadow:0 2px 10px rgba(0,0,0,.4); }
   header .live { display:inline-block; background:#ff3b3b; padding:3px 12px; border-radius:20px; font-size:13px; font-weight:700; margin-top:6px; animation:pulse 1.5s infinite; }
