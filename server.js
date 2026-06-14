@@ -209,6 +209,16 @@ function groupByTeam(players) {
 // ============================================================
 //  API למתחרים
 // ============================================================
+// רשימת קבוצות פעילות (לבחירה במסך ההצטרפות)
+app.get('/api/teams', (req, res) => {
+  const teams = [...new Set(
+    Object.values(db.players)
+      .map(p => (p.team || '').trim())
+      .filter(Boolean)
+  )].sort();
+  res.json({ teams });
+});
+
 // הצטרפות / זיהוי שחקן
 app.post('/api/join', (req, res) => {
   const name = (req.body.name || '').toString().trim();

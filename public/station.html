@@ -43,13 +43,21 @@
   <h1 id="joinGameName">המשחק המשפחתי</h1>
   <p class="muted" style="margin:10px 0 16px">ברוכים הבאים! הזינו פרטים כדי להתחיל לשחק</p>
   <input id="pName" placeholder="השם שלך" autocomplete="off">
-  <input id="pTeam" placeholder="קוד / שם קבוצה" autocomplete="off">
+
+  <!-- בחירת קבוצה: רשימה קיימת או חדשה -->
+  <label style="display:block;text-align:right;font-size:13px;color:#5a6b8a;margin:4px 2px">קבוצה</label>
+  <select id="pTeamSelect" onchange="onTeamSelect()" style="width:100%;padding:14px;border:2px solid #c9d6f0;border-radius:12px;font-size:16px;font-family:inherit;margin-bottom:12px">
+    <option value="__new__">➕ קבוצה חדשה...</option>
+  </select>
+  <input id="pTeam" placeholder="שם הקבוצה החדשה" autocomplete="off">
+
   <button class="btn" onclick="join()">בואו נתחיל! 🚀</button>
 </div>
 
 <!-- מסך שאלה -->
 <div id="qScreen" class="card hidden">
   <span class="badge" id="qBadge">תחנה</span>
+  <p class="muted" id="playerLine" style="margin-top:4px"></p>
   <h1 id="qTitle"></h1>
   <div class="timer" id="timer">⏱️ 0 שניות</div>
   <h2 id="qText"></h2>
@@ -102,17 +110,53 @@ async function init() {
   if (!player) {
     document.getElementById('joinBadge').textContent = 'תחנה ' + stationId;
     show('joinScreen');
-    // טען שם משחק
+    // טען שם משחק ורשימת קבוצות
     try { const r = await fetch('/api/station/' + stationId); const d = await r.json(); document.getElementById('joinGameName').textContent = d.gameName || 'המשחק המשפחתי'; } catch(e){}
+    loadTeams();
     return;
   }
   loadStation();
 }
 
+async function loadTeams() {
+  try {
+    const r = await fetch('/api/teams');
+    const d = await r.json();
+    const sel = document.getElementById('pTeamSelect');
+    // נקה אופציות קודמות חוץ מ"חדשה"
+    sel.innerHTML = '';
+    (d.teams || []).forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = '👥 ' + t;
+      sel.appendChild(o);
+    });
+    const newOpt = document.createElement('option');
+    newOpt.value = '__new__'; newOpt.textContent = '➕ קבוצה חדשה...';
+    sel.appendChild(newOpt);
+    // אם אין קבוצות קיימות - ברירת מחדל "חדשה" והצג תיבת טקסט
+    if (!d.teams || !d.teams.length) sel.value = '__new__';
+    onTeamSelect();
+  } catch(e) {
+    document.getElementById('pTeamSelect').value = '__new__';
+    onTeamSelect();
+  }
+}
+
+function onTeamSelect() {
+  const sel = document.getElementById('pTeamSelect');
+  const newInput = document.getElementById('pTeam');
+  newInput.style.display = (sel.value === '__new__') ? 'block' : 'none';
+  if (sel.value !== '__new__') newInput.value = '';
+}
+
 async function join() {
   const name = document.getElementById('pName').value.trim();
-  const team = document.getElementById('pTeam').value.trim();
+  const sel = document.getElementById('pTeamSelect');
+  const team = (sel.value === '__new__')
+    ? document.getElementById('pTeam').value.trim()
+    : sel.value;
   if (!name) { alert('נא להזין שם'); return; }
+  if (sel.value === '__new__' && !team) { alert('נא להזין שם קבוצה או לבחור קבוצה קיימת'); return; }
   const r = await fetch('/api/join', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, team }) });
   const d = await r.json();
   player = d;
@@ -124,6 +168,11 @@ async function loadStation() {
   const r = await fetch('/api/station/' + stationId + '?player=' + player.playerId);
   station = await r.json();
   document.getElementById('qBadge').textContent = 'תחנה ' + station.id;
+  // שורת שחקן נוכחי + אפשרות החלפה
+  const teamTxt = player.team ? (' · קבוצה: ' + player.team) : '';
+  document.getElementById('playerLine').innerHTML =
+    '👤 ' + escapeHtml(player.name) + escapeHtml(teamTxt) +
+    ' <a href="#" onclick="switchPlayer(event)" style="color:#2a4d9e;font-weight:700">(החלף שחקן)</a>';
   document.getElementById('qTitle').textContent = station.title;
   document.getElementById('qText').textContent = station.questionText || '(לא הוגדרה שאלה לתחנה זו)';
   if (station.imageUrl) { const im = document.getElementById('qImg'); im.src = station.imageUrl; im.classList.remove('hidden'); }
@@ -191,6 +240,18 @@ function showResult(d) {
   document.getElementById('resSub').textContent = d.points ? ('+' + d.points + ' נקודות') : (d.pending ? 'התשובה שלך תיבדק על ידי המנהל' : '');
   show('resultScreen');
 }
+
+// החלפת שחקן - מנקה את הזיהוי המקומי ומחזיר למסך ההצטרפות
+function switchPlayer(e) {
+  if (e) e.preventDefault();
+  if (!confirm('להחליף שחקן? תצטרכו להזין שם וקבוצה מחדש.')) return;
+  localStorage.removeItem('fg_player');
+  player = null;
+  clearInterval(timerInt);
+  init();
+}
+
+function escapeHtml(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function show(id) {
   ['joinScreen','qScreen','resultScreen'].forEach(s => document.getElementById(s).classList.add('hidden'));
