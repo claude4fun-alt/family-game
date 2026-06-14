@@ -452,6 +452,7 @@ app.post('/api/admin/secondary-credentials', auth, (req, res) => {
 
 // --- ניתוב דפים ---
 app.get('/station/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'station.html')));
+app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/board', (req, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

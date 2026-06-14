@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>הצטרפות למשחק</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body { font-family:'Segoe UI',Arial,sans-serif; min-height:100vh; color:#fff; padding:18px;
+    background:#0e1a14 url('/assets/poster.png') center top / cover no-repeat fixed; position:relative; }
+  body::before { content:''; position:fixed; inset:0; background:linear-gradient(180deg, rgba(10,20,15,.6), rgba(10,20,15,.85)); z-index:0; }
+  body > * { position:relative; z-index:1; }
+  .card { background:rgba(255,255,255,.97); color:#1a2a4a; border-radius:22px; padding:26px; max-width:440px; margin:30px auto; box-shadow:0 20px 50px rgba(0,0,0,.45); }
+  h1 { font-size:24px; text-align:center; margin-bottom:6px; }
+  .sub { color:#5a6b8a; text-align:center; margin-bottom:18px; font-size:15px; }
+  label { display:block; text-align:right; font-size:13px; color:#5a6b8a; margin:4px 2px; }
+  input, select { width:100%; padding:14px; border:2px solid #c9d6f0; border-radius:12px; font-size:16px; font-family:inherit; margin-bottom:12px; }
+  .btn { width:100%; padding:16px; border:none; border-radius:14px; font-size:18px; font-weight:800; cursor:pointer; font-family:inherit; color:#fff; background:linear-gradient(135deg,#f5b800,#ff9100); color:#1a1208; box-shadow:0 8px 20px rgba(245,184,0,.4); }
+  .btn:active { transform:scale(.98); }
+  .btn.sec { background:linear-gradient(135deg,#2a4d9e,#3b7dd8); color:#fff; box-shadow:0 8px 20px rgba(42,77,158,.4); margin-top:10px; }
+  .hidden { display:none; }
+  .done { text-align:center; padding:14px 4px; }
+  .done .emoji { font-size:60px; margin-bottom:10px; }
+  .done h1 { font-size:24px; }
+  .done p { color:#5a6b8a; margin:10px 0; font-size:15px; }
+  #qrReader { width:100%; max-width:320px; margin:10px auto; border-radius:14px; overflow:hidden; }
+  .scan-err { color:#c0392b; font-size:13px; text-align:center; }
+  .credit { text-align:center; color:rgba(255,255,255,.6); font-size:12px; margin-top:14px; }
+  .back { display:block; text-align:center; color:#fff; opacity:.85; margin-top:14px; text-decoration:none; font-size:14px; }
+</style>
+</head>
+<body>
+
+<!-- מסך הרשמה -->
+<div id="formCard" class="card">
+  <h1>🎮 הצטרפות למשחק</h1>
+  <p class="sub">רשמו את עצמכם, ואז גשו לתחנה הראשונה</p>
+  <label>השם שלך</label>
+  <input id="pName" placeholder="הקלידו את שמכם" autocomplete="off">
+  <label>קבוצה</label>
+  <select id="pTeamSelect" onchange="onTeamSelect()">
+    <option value="__new__">➕ קבוצה חדשה...</option>
+  </select>
+  <input id="pTeam" placeholder="שם הקבוצה החדשה" autocomplete="off">
+  <button class="btn" onclick="join()">הצטרף למשחק! 🚀</button>
+</div>
+
+<!-- מסך אישור -->
+<div id="doneCard" class="card hidden">
+  <div class="done">
+    <div class="emoji">✅</div>
+    <h1 id="welcomeMsg"></h1>
+    <p>נרשמת בהצלחה! עכשיו גשו לתחנה הראשונה וסרקו את ה-QR שלה כדי להתחיל לענות.</p>
+    <button class="btn" onclick="startScan()" id="scanBtn">📷 סרוק QR של תחנה</button>
+    <div id="qrReader"></div>
+    <p class="scan-err" id="scanErr"></p>
+    <button class="btn sec" style="display:none" id="stopScanBtn" onclick="stopScan()">עצור סריקה</button>
+    <button class="btn sec" onclick="location.href='/board'">📊 צפו בלוח התוצאות</button>
+  </div>
+</div>
+
+<a class="back" href="/">↩ חזרה לתפריט</a>
+<p class="credit">נוצר ע"י Amir Cohen</p>
+
+<script>
+let player = JSON.parse(localStorage.getItem('fg_player') || 'null');
+
+async function init() {
+  await loadTeams();
+  // אם כבר רשום - הצג ישר מסך אישור עם אפשרות החלפה
+  if (player) {
+    showDone(player.name);
+  }
+}
+
+async function loadTeams() {
+  try {
+    const r = await fetch('/api/teams');
+    const d = await r.json();
+    const sel = document.getElementById('pTeamSelect');
+    sel.innerHTML = '';
+    (d.teams || []).forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = '👥 ' + t;
+      sel.appendChild(o);
+    });
+    const newOpt = document.createElement('option');
+    newOpt.value = '__new__'; newOpt.textContent = '➕ קבוצה חדשה...';
+    sel.appendChild(newOpt);
+    if (!d.teams || !d.teams.length) sel.value = '__new__';
+    onTeamSelect();
+  } catch(e) {
+    document.getElementById('pTeamSelect').value = '__new__';
+    onTeamSelect();
+  }
+}
+
+function onTeamSelect() {
+  const sel = document.getElementById('pTeamSelect');
+  const newInput = document.getElementById('pTeam');
+  newInput.style.display = (sel.value === '__new__') ? 'block' : 'none';
+  if (sel.value !== '__new__') newInput.value = '';
+}
+
+async function join() {
+  const name = document.getElementById('pName').value.trim();
+  const sel = document.getElementById('pTeamSelect');
+  const team = (sel.value === '__new__') ? document.getElementById('pTeam').value.trim() : sel.value;
+  if (!name) { alert('נא להזין שם'); return; }
+  if (sel.value === '__new__' && !team) { alert('נא להזין שם קבוצה או לבחור קבוצה קיימת'); return; }
+  const r = await fetch('/api/join', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, team }) });
+  const d = await r.json();
+  player = d;
+  localStorage.setItem('fg_player', JSON.stringify(player));
+  showDone(name);
+}
+
+function showDone(name) {
+  document.getElementById('welcomeMsg').textContent = 'ברוכים הבאים, ' + name + '!';
+  document.getElementById('formCard').classList.add('hidden');
+  document.getElementById('doneCard').classList.remove('hidden');
+}
+
+// --- סורק QR ---
+let qrScanner = null;
+async function startScan() {
+  const err = document.getElementById('scanErr'); err.textContent = '';
+  document.getElementById('scanBtn').style.display = 'none';
+  document.getElementById('stopScanBtn').style.display = 'block';
+  try {
+    qrScanner = new Html5Qrcode('qrReader');
+    await qrScanner.start({ facingMode:'environment' }, { fps:10, qrbox:{width:220,height:220} }, onScanSuccess, ()=>{});
+  } catch(e) {
+    err.textContent = 'לא ניתן לגשת למצלמה. ודאו שאישרתם הרשאה, או סרקו עם אפליקציית המצלמה.';
+    document.getElementById('scanBtn').style.display = 'block';
+    document.getElementById('stopScanBtn').style.display = 'none';
+  }
+}
+function onScanSuccess(decodedText) {
+  stopScan();
+  try { const url = new URL(decodedText); if (/\/station\/\d+/.test(url.pathname)) { location.href = url.pathname; return; } } catch(e){}
+  location.href = decodedText;
+}
+async function stopScan() {
+  if (qrScanner) { try { await qrScanner.stop(); qrScanner.clear(); } catch(e){} qrScanner = null; }
+  document.getElementById('stopScanBtn').style.display = 'none';
+  document.getElementById('scanBtn').style.display = 'block';
+}
+
+init();
+</script>
+</body>
+</html>

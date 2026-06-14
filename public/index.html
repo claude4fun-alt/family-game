@@ -33,6 +33,7 @@
   .b2 { background:linear-gradient(135deg,#22a06b,#42f5b3); }
   .b3 { background:linear-gradient(135deg,#2a4d9e,#3b7dd8); }
   .bscan { background:linear-gradient(135deg,#f5b800,#ff9100); color:#1a1208; }
+  .bjoin { background:linear-gradient(135deg,#22a06b,#16c79a); color:#fff; }
   #qrReader { width:100%; max-width:320px; margin:8px auto 12px; border-radius:14px; overflow:hidden; }
   .scan-err { color:#c0392b; font-size:13px; margin-bottom:10px; }
   .credit { color:#8a98b5; font-size:13px; margin-top:16px; }
@@ -52,6 +53,7 @@
   <div class="card">
     <div class="logo">🎮 משחק חברה</div>
     <div class="sub">לכל הגילאים</div>
+    <a class="btn bjoin" href="/join">🙋 הצטרף למשחק</a>
     <button class="btn bscan" id="scanBtn" onclick="startScan()">📷 סרוק QR של תחנה</button>
     <div id="qrReader"></div>
     <p class="scan-err" id="scanErr"></p>
