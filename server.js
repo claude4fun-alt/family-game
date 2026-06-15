@@ -5,6 +5,7 @@
 const express = require('express');
 const multer = require('multer');
 const QRCode = require('qrcode');
+const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
@@ -15,6 +16,65 @@ const PORT = process.env.PORT || 3007;
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+
+// --- גיבוי DB ל-GitHub (persistence ששורד restart ב-Render) ---
+const GH = {
+  token: process.env.GH_TOKEN || '',
+  owner: process.env.GH_OWNER || '',
+  repo: process.env.GH_REPO || '',
+  branch: process.env.GH_BRANCH || 'main',
+  path: process.env.GH_PATH || 'db.json'
+};
+const GH_ENABLED = !!(GH.token && GH.owner && GH.repo);
+let ghSha = null; // ה-sha הנוכחי של הקובץ ב-GitHub (לעדכונים)
+
+// קריאת db.json מ-GitHub. מחזיר את התוכן (string) או null אם לא קיים/כבוי.
+async function ghPull() {
+  if (!GH_ENABLED) return null;
+  const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${encodeURIComponent(GH.path)}?ref=${encodeURIComponent(GH.branch)}`;
+  try {
+    const r = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${GH.token}`, 'Accept': 'application/vnd.github+json', 'User-Agent': 'family-game' }
+    });
+    if (r.status === 404) { ghSha = null; return null; }   // עוד לא קיים - גיבוי ראשון יוצר אותו
+    if (!r.ok) { console.warn('ghPull failed:', r.status); return null; }
+    const data = await r.json();
+    ghSha = data.sha;
+    return Buffer.from(data.content || '', 'base64').toString('utf8');
+  } catch (e) {
+    console.warn('ghPull error:', e.message);
+    return null;
+  }
+}
+
+// דחיפת db.json ל-GitHub עם טיפול בהתנגשות 409 (sha לא מעודכן)
+async function ghPush(retry = true) {
+  if (!GH_ENABLED) return;
+  const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${encodeURIComponent(GH.path)}`;
+  const body = {
+    message: `update db.json ${new Date().toISOString()}`,
+    content: Buffer.from(JSON.stringify(db, null, 2), 'utf8').toString('base64'),
+    branch: GH.branch
+  };
+  if (ghSha) body.sha = ghSha;
+  try {
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${GH.token}`, 'Accept': 'application/vnd.github+json', 'User-Agent': 'family-game', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (r.status === 409 && retry) {
+      // התנגשות sha - משוך את ה-sha העדכני ונסה שוב פעם אחת
+      await ghPull();
+      return ghPush(false);
+    }
+    if (!r.ok) { console.warn('ghPush failed:', r.status); return; }
+    const data = await r.json();
+    if (data.content && data.content.sha) ghSha = data.content.sha;
+  } catch (e) {
+    console.warn('ghPush error:', e.message);
+  }
+}
 
 // --- משתמשי מנהל ---
 // מנהל-על: קבוע, לא ניתן לשינוי
@@ -54,27 +114,52 @@ function defaultDB() {
 }
 
 let db;
-function loadDB() {
-  try {
-    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    if (!db.stations || db.stations.length === 0) db = defaultDB();
-  } catch (e) {
-    db = defaultDB();
+async function loadDB() {
+  let loaded = false;
+  // 1. נסה למשוך מ-GitHub (מקור האמת אם מוגדר)
+  const remote = await ghPull();
+  if (remote) {
+    try {
+      db = JSON.parse(remote);
+      if (db.stations && db.stations.length) {
+        loaded = true;
+        // שמור עותק מקומי לגיבוי מהיר
+        try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {}
+        console.log('📥 DB נטען מ-GitHub');
+      }
+    } catch (e) { console.warn('GitHub DB parse failed, נופל לדיסק מקומי'); }
+  }
+  // 2. נפילה לדיסק מקומי
+  if (!loaded) {
+    try {
+      db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      if (!db.stations || db.stations.length === 0) db = defaultDB();
+    } catch (e) {
+      db = defaultDB();
+    }
   }
   // backfill לשדות חדשים אם נטען DB ישן
   if (!db.secondaryUser) db.secondaryUser = { ...DEFAULT_SECONDARY };
   if (!db.speedBonus) db.speedBonus = { enabled: true, maxBonus: 10, windowSec: 60 };
 }
+
 let saveTimer = null;
+let ghPushTimer = null;
 function saveDB() {
+  // שמירה מקומית מיידית (debounce קצר כמו קודם)
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {}
   }, 200);
+  // דחיפה ל-GitHub עם debounce ארוך יותר (~4 שניות) כדי לא להציף את ה-API
+  if (GH_ENABLED) {
+    clearTimeout(ghPushTimer);
+    ghPushTimer = setTimeout(() => { ghPush(); }, 4000);
+  }
 }
-loadDB();
 
-// --- העלאת קבצים (תמונות) ---
+// --- העלאת קבצים ---
+// תשובות משתמשים (תמונות) - נשמרות לדיסק כרגיל (לא מוטמעות ב-db כדי לא לנפח אותו)
 const storage = multer.diskStorage({
   destination: (req, f, cb) => cb(null, UPLOADS_DIR),
   filename: (req, f, cb) => {
@@ -84,7 +169,10 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 12 * 1024 * 1024 } });
 
-app.use(express.json({ limit: '2mb' }));
+// תמונות שאלה שהמנהל מעלה - נשמרות בזיכרון ומוטמעות כ-data URI בתוך db.json
+const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
+
+app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -350,7 +438,7 @@ app.post('/api/admin/game-name', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/admin/station/:id', auth, upload.single('image'), (req, res) => {
+app.post('/api/admin/station/:id', auth, memUpload.single('image'), async (req, res) => {
   const st = db.stations.find(s => s.id == req.params.id);
   if (!st) return res.status(404).json({ error: 'תחנה לא קיימת' });
   if (req.body.title !== undefined) st.title = req.body.title;
@@ -359,7 +447,20 @@ app.post('/api/admin/station/:id', auth, upload.single('image'), (req, res) => {
   if (req.body.correctAnswer !== undefined) st.correctAnswer = req.body.correctAnswer;
   if (req.body.points !== undefined) st.points = Number(req.body.points) || 10;
   if (req.body.imageLink) st.imageUrl = req.body.imageLink;  // לינק חיצוני
-  if (req.file) st.imageUrl = '/uploads/' + req.file.filename; // העלאה
+  if (req.file) {
+    // המר את התמונה ל-WebP מוקטן ושמור כ-data URI בתוך db (מגובה אוטומטית ל-GitHub)
+    try {
+      const buf = await sharp(req.file.buffer)
+        .rotate()
+        .resize({ width: 1000, withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toBuffer();
+      st.imageUrl = 'data:image/webp;base64,' + buf.toString('base64');
+    } catch (e) {
+      console.warn('image processing failed:', e.message);
+      return res.status(400).json({ error: 'עיבוד התמונה נכשל' });
+    }
+  }
   if (req.body.clearImage === 'true') st.imageUrl = '';
   saveDB();
   res.json({ ok: true, station: st });
@@ -457,4 +558,13 @@ app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 
 app.get('/board', (req, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => console.log(`🎮 המשחק רץ על פורט ${PORT}`));
+// טען DB (כולל משיכה מ-GitHub אם מוגדר) ואז הפעל את השרת
+loadDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🎮 המשחק רץ על פורט ${PORT}`);
+    console.log(GH_ENABLED ? '☁️  גיבוי GitHub פעיל' : '💾 אחסון מקומי בלבד (גיבוי GitHub כבוי)');
+  });
+}).catch(err => {
+  console.error('שגיאה בטעינת DB:', err);
+  process.exit(1);
+});
